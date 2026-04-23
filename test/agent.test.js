@@ -114,3 +114,49 @@ test("sanitizes AI replies that repeat selected branch", () => {
   assert.doesNotMatch(cleaned, /какой филиал/i);
   assert.match(cleaned, /Какое время записи/i);
 });
+
+test("answers implant price concisely in local mode", async () => {
+  const clinic = {
+    ...business,
+    name: "Стоматология Ольга",
+    catalog: [
+      {
+        name: "Имплантация зубов под ключ",
+        price: "По плану лечения",
+        description: "Клиника выполняет полный цикл: от обследования до протезирования и дальнейшего сопровождения."
+      }
+    ],
+    faq: [
+      {
+        q: "Какие услуги есть в клинике?",
+        a: "Клиника оказывает лечение зубов, протезирование, коронки, виниры и имплантацию."
+      },
+      {
+        q: "Есть ли имплантация?",
+        a: "Да. Фиксированной общей цены на странице имплантации не указано, стоимость формируется по плану лечения."
+      },
+      {
+        q: "Какие врачи работают в клинике?",
+        a: "В клинике работают стоматологи-терапевты, ортопеды, имплантологи, ортодонты."
+      }
+    ],
+    leadQuestions: [
+      "Какая услуга или проблема вас интересует?",
+      "Какой филиал и время вам удобнее?",
+      "Как с вами лучше связаться для записи?"
+    ]
+  };
+
+  const result = await generateSalesReply({
+    business: clinic,
+    conversation: { leadDraft: {}, messages: [] },
+    text: "хочу поставить имплант, что по ценам?",
+    user: {}
+  });
+
+  assert.match(result.reply, /фиксированной общей цены/i);
+  assert.match(result.reply, /плану лечения/i);
+  assert.doesNotMatch(result.reply, /Какие услуги/i);
+  assert.doesNotMatch(result.reply, /Какие врачи/i);
+  assert.equal((result.reply.match(/\n\n/g) || []).length <= 1, true);
+});

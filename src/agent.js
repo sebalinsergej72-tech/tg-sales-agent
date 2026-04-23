@@ -224,6 +224,48 @@ function buildSummary({ business, text, intent, fields, leadDraft }) {
   return `${business.name}: ${parts.join("; ")}. Намерение: ${intent}.`;
 }
 
+function findCatalogItem(business, interest) {
+  if (!interest) return null;
+  return (business.catalog || []).find((item) => item.name === interest) || null;
+}
+
+function formatCatalogReply(item) {
+  const price = item.price || "";
+  const description = item.description || "";
+  const planPrice = /по плану|не указ/i.test(price);
+  if (planPrice) {
+    return [
+      `${item.name}: фиксированной общей цены на сайте не указано.`,
+      "Стоимость формируется по плану лечения после обследования.",
+      description
+    ]
+      .filter(Boolean)
+      .join("\n");
+  }
+
+  return [
+    `${item.name}: ${price ? `ориентир по прайсу ${price}.` : ""}`.trim(),
+    description
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+function formatKnowledgeReply({ business, intent, knowledge, leadDraft }) {
+  const catalogItem = findCatalogItem(business, leadDraft?.interest);
+  if (catalogItem && (intent === "price" || intent === "booking" || intent === "general")) {
+    return formatCatalogReply(catalogItem);
+  }
+
+  const useful = knowledge
+    .filter((item) => !/^какие услуги|^какие врачи/i.test(item.title))
+    .slice(0, 2);
+  const items = useful.length ? useful : knowledge.slice(0, 1);
+  return items
+    .map((item) => item.body)
+    .join("\n\n");
+}
+
 function localReply({ business, conversation, text, user }) {
   const intent = classify(text);
   const knowledge = retrieveKnowledge(business, text);
@@ -240,9 +282,7 @@ function localReply({ business, conversation, text, user }) {
   if (intent === "greeting") {
     reply = `Здравствуйте! Я ассистент ${business.name}. Подскажу по услугам, ценам и помогу передать заявку администратору. Что вас интересует?`;
   } else if (knowledge.length) {
-    reply = knowledge
-      .map((item) => `${item.title}: ${item.body}`)
-      .join("\n\n");
+    reply = formatKnowledgeReply({ business, intent, knowledge, leadDraft });
   } else if (intent === "location") {
     reply = business.address
       ? `Мы находимся здесь: ${business.address}. ${business.workingHours ? `Работаем: ${business.workingHours}.` : ""}`
@@ -400,5 +440,6 @@ export const internals = {
   localReply,
   normalize,
   nextQuestion,
-  sanitizeAiReply
+  sanitizeAiReply,
+  formatKnowledgeReply
 };
