@@ -159,20 +159,21 @@ export class JsonStore {
           updatedAt: now()
         });
       }
-      return { ...bot, token: undefined };
+      const { tokenBox: _tokenBox, ...safe } = bot;
+      return safe;
     });
   }
 
   listBots(businessId) {
     const bots = this.read().bots.filter((bot) => !businessId || bot.businessId === businessId);
-    return bots.map(({ tokenBox, ...bot }) => bot);
+    return bots.map(({ tokenBox, webhookUrl, ...bot }) => bot);
   }
 
   getBotByTelegramId(telegramBotId, includeToken = false) {
     const bot = this.read().bots.find((b) => String(b.telegramBotId) === String(telegramBotId));
     if (!bot) return null;
     if (!includeToken) {
-      const { tokenBox, ...safe } = bot;
+      const { tokenBox, webhookUrl, ...safe } = bot;
       return safe;
     }
     return { ...bot, token: open(bot.tokenBox, config.encryptionKey) };
