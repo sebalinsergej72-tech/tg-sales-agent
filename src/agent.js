@@ -97,6 +97,16 @@ function scoreKnowledge(query, itemText) {
   return score;
 }
 
+function addressCandidates(address = "") {
+  const cleaned = String(address)
+    .replace(/^филиалы?:/i, "")
+    .trim();
+  return cleaned
+    .split(";")
+    .map((item) => item.trim().replace(/\.$/, ""))
+    .filter(Boolean);
+}
+
 export function retrieveKnowledge(business, text, limit = 4) {
   const faq = (business.faq || []).map((item) => ({
     type: "faq",
@@ -115,6 +125,33 @@ export function retrieveKnowledge(business, text, limit = 4) {
     .filter((item) => item.score > 0)
     .sort((a, b) => b.score - a.score)
     .slice(0, limit);
+}
+
+function extractLocationField(business, text) {
+  const normalized = normalize(text);
+  const candidates = addressCandidates(business.address);
+  let best = null;
+  let bestScore = 0;
+
+  for (const candidate of candidates) {
+    const score = scoreKnowledge(text, candidate);
+    if (score > bestScore) {
+      best = candidate;
+      bestScore = score;
+    }
+  }
+
+  if (bestScore >= 1) return best;
+
+  if (normalized.includes("санкт петербург") || normalized.includes("спб") || normalized.includes("каховск") || normalized.includes("пифагор")) {
+    return candidates.find((candidate) => /санкт|каховск|пифагор/i.test(candidate)) || "Санкт-Петербург";
+  }
+
+  if (normalized.includes("зеленогор") || normalized.includes("привокзаль")) {
+    return candidates.find((candidate) => /зеленогор|привокзаль/i.test(candidate)) || "Зеленогорск";
+  }
+
+  return "";
 }
 
 function extractLeadFields(business, text, user = {}) {
@@ -150,13 +187,24 @@ function extractLeadFields(business, text, user = {}) {
   const budget = text.match(/(?:до|около|примерно|бюджет)?\s?(\d{2,6})\s?(?:₽|руб|р|k|к)/i);
   if (budget) fields.budget = budget[0].trim();
 
+  const location = extractLocationField(business, text);
+  if (location) fields.location = location;
+
   return fields;
 }
 
 function nextQuestion(business, leadDraft) {
   const fields = leadDraft || {};
   if (!fields.interest) return business.leadQuestions?.[0] || "Какая услуга вас интересует?";
-  if (!fields.desiredTime) return business.leadQuestions?.[1] || "Когда вам было бы удобно?";
+  const secondQuestion = business.leadQuestions?.[1] || "Когда вам было бы удобно?";
+  const asksLocationAndTime = /филиал|адрес|локац/i.test(secondQuestion) && /время|когда/i.test(secondQuestion);
+  if (asksLocationAndTime) {
+    if (!fields.location && !fields.desiredTime) return secondQuestion;
+    if (!fields.location) return "Какой филиал вам удобнее?";
+    if (!fields.desiredTime) return "Какое время записи вам удобно?";
+  } else if (!fields.desiredTime) {
+    return secondQuestion;
+  }
   if (!fields.contact && !fields.telegram) return business.leadQuestions?.[2] || "Как с вами удобнее связаться?";
   return "";
 }
@@ -169,6 +217,7 @@ function buildSummary({ business, text, intent, fields, leadDraft }) {
     merged.desiredTime ? `Когда: ${merged.desiredTime}` : "",
     merged.contact ? `Контакт: ${merged.contact}` : "",
     merged.telegram ? `Telegram: ${merged.telegram}` : "",
+    merged.location ? `Филиал: ${merged.location}` : "",
     merged.budget ? `Бюджет: ${merged.budget}` : "",
     `Последний запрос: ${text}`
   ].filter(Boolean);
@@ -271,6 +320,7 @@ async function openAiReply({ business, conversation, text, user, llm }) {
           role: "system",
           content:
             "Ты Telegram AI-продавец малого бизнеса. Отвечай кратко, по-русски, только на основе базы знаний. Не выдумывай цены, гарантии, диагнозы или юридические выводы. Если данных не хватает, задай один уточняющий вопрос или предложи передать администратору."
+            + " Не переспрашивай поля, которые уже есть в истории или собранных данных. Если филиал уже выбран, спрашивай только время записи."
         },
         {
           role: "user",
@@ -287,6 +337,9 @@ async function openAiReply({ business, conversation, text, user, llm }) {
             "",
             "История:",
             history || "Нет истории.",
+            "",
+            "Уже собранные поля заявки:",
+            JSON.stringify(local.leadDraft),
             "",
             `Новое сообщение клиента: ${text}`,
             "",

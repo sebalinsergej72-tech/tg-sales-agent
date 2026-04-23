@@ -61,3 +61,44 @@ test("does not invent a risky medical answer", async () => {
   assert.equal(result.shouldHandoff, true);
   assert.match(result.reply, /специалист|администратор/i);
 });
+
+test("does not ask for branch again after it was selected", async () => {
+  const clinic = {
+    ...business,
+    name: "Стоматология Ольга",
+    address:
+      "Филиалы: Санкт-Петербург, переулок Каховского, 12, БЦ «Пифагор», 2 этаж; Зеленогорск, ул. Привокзальная, д. 3, литер А.",
+    leadQuestions: [
+      "Какая услуга или проблема вас интересует?",
+      "Какой филиал и время вам удобнее?",
+      "Как с вами лучше связаться для записи?"
+    ]
+  };
+
+  const fields = internals.extractLeadFields(
+    clinic,
+    "Санкт-Петербург, переулок Каховского, 12, БЦ «Пифагор», 2 этаж"
+  );
+  assert.match(fields.location, /Каховского/);
+
+  const question = internals.nextQuestion(clinic, {
+    interest: "Лечение кариеса Filtek",
+    location: fields.location
+  });
+  assert.equal(question, "Какое время записи вам удобно?");
+
+  const result = await generateSalesReply({
+    business: clinic,
+    conversation: {
+      leadDraft: {
+        interest: "Лечение кариеса Filtek",
+        location: fields.location
+      },
+      messages: []
+    },
+    text: "я уже сказал какой филиал",
+    user: {}
+  });
+  assert.doesNotMatch(result.reply, /какой филиал и время/i);
+  assert.match(result.reply, /время/i);
+});
