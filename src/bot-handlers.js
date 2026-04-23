@@ -12,6 +12,8 @@ import {
 } from "./telegram.js";
 
 function llmConfig() {
+  if (!config.llmEnabled) return { provider: "local", apiKey: "", model: "", baseUrl: "", headers: {} };
+
   if (config.openrouterApiKey) {
     return {
       provider: "openrouter",

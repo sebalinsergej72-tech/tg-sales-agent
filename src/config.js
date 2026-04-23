@@ -37,6 +37,7 @@ export const config = {
   adminImportSecret: process.env.ADMIN_IMPORT_SECRET || "",
   telegramPolling: boolEnv("TELEGRAM_POLLING", false),
   telegramPollTimeout: Number(process.env.TELEGRAM_POLL_TIMEOUT || 25),
+  llmEnabled: boolEnv("LLM_ENABLED", true),
   openaiApiKey: process.env.OPENAI_API_KEY || "",
   openaiModel: process.env.OPENAI_MODEL || "gpt-4.1-mini",
   openaiBaseUrl: process.env.OPENAI_BASE_URL || "https://api.openai.com/v1/chat/completions",

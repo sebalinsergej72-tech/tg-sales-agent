@@ -101,13 +101,20 @@ function dbSummary(db) {
 
 async function api(req, res, method, pathname, query) {
   if (method === "GET" && pathname === "/api/health") {
-    const llmProvider = config.openrouterApiKey ? "openrouter" : config.openaiApiKey ? "openai" : "local";
+    const llmProvider = !config.llmEnabled
+      ? "local"
+      : config.openrouterApiKey
+        ? "openrouter"
+        : config.openaiApiKey
+          ? "openai"
+          : "local";
     return json(res, 200, {
       ok: true,
       service: "tg-sales-agent",
       baseUrl: config.baseUrl,
       managerConfigured: Boolean(config.managerBotToken && config.managerBotUsername),
       pollingEnabled: config.telegramPolling,
+      llmEnabled: config.llmEnabled,
       llmProvider,
       openaiConfigured: Boolean(config.openaiApiKey),
       openrouterConfigured: Boolean(config.openrouterApiKey)
@@ -196,7 +203,9 @@ async function api(req, res, method, pathname, query) {
       conversation,
       text: body.text,
       user: { id: "simulator", first_name: "Demo" },
-      openai: config.openrouterApiKey
+      openai: !config.llmEnabled
+        ? { provider: "local", apiKey: "", model: "", baseUrl: "", headers: {} }
+        : config.openrouterApiKey
         ? {
             provider: "openrouter",
             apiKey: config.openrouterApiKey,
