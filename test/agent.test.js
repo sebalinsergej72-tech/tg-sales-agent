@@ -171,3 +171,44 @@ test("rewrites website-language into clinic voice", () => {
   assert.match(text, /У нас 2 филиала/i);
   assert.match(text, /По прайсу/i);
 });
+
+test("retrieval respects transport category for fleet rental", async () => {
+  const fleetBusiness = {
+    ...business,
+    name: "TalkNight Drive",
+    niche: "fleet_rental",
+    catalog: [
+      {
+        name: "Аренда авто под такси",
+        price: "от 1500 ₽ / день",
+        description: "Автомобили для такси, без депозита, есть выкуп."
+      },
+      {
+        name: "Аренда электробайков для доставки",
+        price: "от 300 ₽ / сутки",
+        description: "Электробайки для курьеров и доставки, есть варианты с выкупом."
+      }
+    ],
+    faq: [
+      {
+        q: "Можно ли без депозита?",
+        a: "Да, по большинству автомобилей доступны варианты без депозита."
+      }
+    ],
+    leadQuestions: [
+      "Что вам нужно: авто под такси или электробайк под доставку?",
+      "Какой тариф, парк или район вам удобнее?",
+      "Когда хотите начать и как с вами лучше связаться?"
+    ]
+  };
+
+  const result = await generateSalesReply({
+    business: fleetBusiness,
+    conversation: { leadDraft: {}, messages: [] },
+    text: "Нужна машина под такси без депозита, что есть по цене?",
+    user: {}
+  });
+
+  assert.match(result.reply, /авто под такси|автомобили/i);
+  assert.doesNotMatch(result.reply, /электробайк/i);
+});

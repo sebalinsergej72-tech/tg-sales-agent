@@ -11,6 +11,11 @@ const serviceSynonyms = {
   запись: ["запис", "бронь", "окно"]
 };
 
+const domainSignals = {
+  car: ["машин", "авто", "такси", "тариф", "комфорт", "эконом", "седан", "кроссовер"],
+  bike: ["байк", "электробай", "велосип", "достав", "курьер", "аккумулятор"]
+};
+
 const stopWords = new Set([
   "и",
   "или",
@@ -97,6 +102,43 @@ function scoreKnowledge(query, itemText) {
   return score;
 }
 
+function inferDomain(text) {
+  const normalized = normalize(text);
+  const carHits = domainSignals.car.filter((word) => normalized.includes(word)).length;
+  const bikeHits = domainSignals.bike.filter((word) => normalized.includes(word)).length;
+  if (carHits && carHits > bikeHits) return "car";
+  if (bikeHits && bikeHits > carHits) return "bike";
+  return "";
+}
+
+function knowledgeDomain(text) {
+  const normalized = normalize(text);
+  if (domainSignals.car.some((word) => normalized.includes(word))) return "car";
+  if (domainSignals.bike.some((word) => normalized.includes(word))) return "bike";
+  return "";
+}
+
+function scoreBoosts(query, itemText) {
+  const normalizedQuery = normalize(query);
+  const normalizedItem = normalize(itemText);
+  let score = 0;
+
+  const queryDomain = inferDomain(query);
+  const itemDomain = knowledgeDomain(itemText);
+  if (queryDomain && itemDomain) {
+    score += queryDomain === itemDomain ? 3 : -2;
+  }
+
+  if (normalizedQuery.includes("без депозит") && normalizedItem.includes("без депозит")) score += 2;
+  if (normalizedQuery.includes("выкуп") && normalizedItem.includes("выкуп")) score += 2;
+  if (normalizedQuery.includes("парк") && normalizedItem.includes("парк")) score += 1;
+  if (normalizedQuery.includes("цена") || normalizedQuery.includes("сколько") || normalizedQuery.includes("стоим")) {
+    if (normalizedItem.includes("цена") || normalizedItem.includes("₽") || normalizedItem.includes("руб")) score += 1;
+  }
+
+  return score;
+}
+
 function addressCandidates(address = "") {
   const cleaned = String(address)
     .replace(/^филиалы?:/i, "")
@@ -112,13 +154,15 @@ export function retrieveKnowledge(business, text, limit = 4) {
     type: "faq",
     title: item.q,
     body: item.a,
-    score: scoreKnowledge(text, `${item.q} ${item.a}`)
+    score: scoreKnowledge(text, `${item.q} ${item.a}`) + scoreBoosts(text, `${item.q} ${item.a}`)
   }));
   const catalog = (business.catalog || []).map((item) => ({
     type: "catalog",
     title: item.name,
     body: `${item.price ? `Цена: ${item.price}. ` : ""}${item.description || ""}`,
-    score: scoreKnowledge(text, `${item.name} ${item.price || ""} ${item.description || ""}`)
+    score:
+      scoreKnowledge(text, `${item.name} ${item.price || ""} ${item.description || ""}`) +
+      scoreBoosts(text, `${item.name} ${item.price || ""} ${item.description || ""}`)
   }));
 
   return [...faq, ...catalog]
@@ -176,6 +220,14 @@ function extractLeadFields(business, text, user = {}) {
     if (serviceMentioned) {
       fields.interest = item.name;
       break;
+    }
+  }
+
+  if (!fields.interest) {
+    const domain = inferDomain(text);
+    if (domain) {
+      const fallback = (business.catalog || []).find((item) => knowledgeDomain(`${item.name} ${item.description || ""}`) === domain);
+      if (fallback) fields.interest = fallback.name;
     }
   }
 

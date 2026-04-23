@@ -8,7 +8,8 @@
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
     "test": "node --test",
-    "seed:olga-clinic": "node scripts/seed_olga_clinic_bot.js"
+    "seed:olga-clinic": "node scripts/seed_olga_clinic_bot.js",
+    "seed:toknite-drive": "node scripts/seed_toknite_drive.js"
   },
   "engines": {
     "node": ">=20"
