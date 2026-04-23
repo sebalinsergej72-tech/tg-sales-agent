@@ -154,9 +154,20 @@ test("answers implant price concisely in local mode", async () => {
     user: {}
   });
 
-  assert.match(result.reply, /фиксированной общей цены/i);
+  assert.match(result.reply, /точную стоимость/i);
   assert.match(result.reply, /плану лечения/i);
   assert.doesNotMatch(result.reply, /Какие услуги/i);
   assert.doesNotMatch(result.reply, /Какие врачи/i);
+  assert.doesNotMatch(result.reply, /сайт|страниц/i);
   assert.equal((result.reply.match(/\n\n/g) || []).length <= 1, true);
+});
+
+test("rewrites website-language into clinic voice", () => {
+  const text = internals.speakAsClinic(
+    "На сайте указаны филиалы: Санкт-Петербург, адрес 1. По терапевтическому прайсу: чистка 3000 ₽."
+  );
+
+  assert.doesNotMatch(text, /сайт|страниц/i);
+  assert.match(text, /У нас 2 филиала/i);
+  assert.match(text, /По прайсу/i);
 });

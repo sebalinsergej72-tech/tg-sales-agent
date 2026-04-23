@@ -224,6 +224,29 @@ function buildSummary({ business, text, intent, fields, leadDraft }) {
   return `${business.name}: ${parts.join("; ")}. Намерение: ${intent}.`;
 }
 
+function speakAsClinic(text) {
+  return String(text || "")
+    .replace(/^По сайту[:,]?\s*/giu, "")
+    .replace(/На сайте указаны филиалы:\s*/giu, "У нас 2 филиала: ")
+    .replace(/На сайте указаны:\s*/giu, "")
+    .replace(/На сайте есть\s*/giu, "У нас есть ")
+    .replace(/На сайте клиника заявляет\s*/giu, "Мы выполняем ")
+    .replace(/На странице контактов указано:\s*/giu, "")
+    .replace(/На странице [^:]+ указано,? что\s*/giu, "")
+    .replace(/На странице [^:]+ указана\s*/giu, "")
+    .replace(/На странице [^:]+ указаны\s*/giu, "")
+    .replace(/По терапевтическому прайсу:\s*/giu, "По прайсу: ")
+    .replace(/По терапевтическому прайсу\s*/giu, "По прайсу ")
+    .replace(/По странице брекетов указаны такие цены/giu, "По брекетам цены такие")
+    .replace(/По сайту:\s*/giu, "")
+    .replace(/\bна сайте\b/giu, "")
+    .replace(/\bна странице\b/giu, "")
+    .replace(/\bуказано\b/giu, "")
+    .replace(/\s{2,}/g, " ")
+    .replace(/\s+([,.:;])/g, "$1")
+    .trim();
+}
+
 function findCatalogItem(business, interest) {
   if (!interest) return null;
   return (business.catalog || []).find((item) => item.name === interest) || null;
@@ -231,12 +254,11 @@ function findCatalogItem(business, interest) {
 
 function formatCatalogReply(item) {
   const price = item.price || "";
-  const description = item.description || "";
+  const description = speakAsClinic(item.description || "");
   const planPrice = /по плану|не указ/i.test(price);
   if (planPrice) {
     return [
-      `${item.name}: фиксированной общей цены на сайте не указано.`,
-      "Стоимость формируется по плану лечения после обследования.",
+      `${item.name}: точную стоимость рассчитываем по плану лечения после осмотра и диагностики.`,
       description
     ]
       .filter(Boolean)
@@ -262,7 +284,7 @@ function formatKnowledgeReply({ business, intent, knowledge, leadDraft }) {
     .slice(0, 2);
   const items = useful.length ? useful : knowledge.slice(0, 1);
   return items
-    .map((item) => item.body)
+    .map((item) => speakAsClinic(item.body))
     .join("\n\n");
 }
 
@@ -441,5 +463,6 @@ export const internals = {
   normalize,
   nextQuestion,
   sanitizeAiReply,
-  formatKnowledgeReply
+  formatKnowledgeReply,
+  speakAsClinic
 };
