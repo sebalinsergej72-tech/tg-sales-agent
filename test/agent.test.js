@@ -102,3 +102,15 @@ test("does not ask for branch again after it was selected", async () => {
   assert.doesNotMatch(result.reply, /какой филиал и время/i);
   assert.match(result.reply, /время/i);
 });
+
+test("sanitizes AI replies that repeat selected branch", () => {
+  const cleaned = internals.sanitizeAiReply("Понял. Какой филиал и время вам удобнее?", {
+    leadDraft: {
+      location: "Санкт-Петербург, переулок Каховского, 12",
+      interest: "Лечение кариеса Filtek"
+    }
+  });
+
+  assert.doesNotMatch(cleaned, /какой филиал/i);
+  assert.match(cleaned, /Какое время записи/i);
+});

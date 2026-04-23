@@ -302,6 +302,7 @@ async function openAiReply({ business, conversation, text, user, llm }) {
     .slice(-8)
     .map((message) => `${message.role}: ${message.text}`)
     .join("\n");
+  const missingQuestion = local.shouldHandoff ? "" : nextQuestion(business, local.leadDraft);
 
   const headers = {
     "Content-Type": "application/json",
@@ -319,8 +320,11 @@ async function openAiReply({ business, conversation, text, user, llm }) {
         {
           role: "system",
           content:
-            "Ты Telegram AI-продавец малого бизнеса. Отвечай кратко, по-русски, только на основе базы знаний. Не выдумывай цены, гарантии, диагнозы или юридические выводы. Если данных не хватает, задай один уточняющий вопрос или предложи передать администратору."
-            + " Не переспрашивай поля, которые уже есть в истории или собранных данных. Если филиал уже выбран, спрашивай только время записи."
+            "Ты Telegram AI-продавец малого бизнеса. Формулируй ответ сам, живо и кратко, опираясь только на базу знаний и историю диалога. "
+            + "Не выдумывай цены, гарантии, диагнозы, доступные окна записи или юридические выводы. "
+            + "Не переспрашивай поля, которые уже есть в истории или собранных данных. Если филиал уже выбран, спрашивай только время записи. "
+            + "Если клиент раздражен тем, что уже отвечал, коротко извинись и продолжи с учетом уже известных данных. "
+            + "В конце задай максимум один следующий вопрос. Если вопрос медицински чувствительный или нужна точная смета, предложи передать администратору."
         },
         {
           role: "user",
@@ -343,7 +347,11 @@ async function openAiReply({ business, conversation, text, user, llm }) {
             "",
             `Новое сообщение клиента: ${text}`,
             "",
-            `Локальная политика предлагает следующий CTA: ${local.shouldHandoff ? "передать человеку" : nextQuestion(business, local.leadDraft) || "подтвердить заявку"}`
+            local.shouldHandoff
+              ? "Следующий шаг: предложить передать вопрос администратору."
+              : missingQuestion
+                ? `Недостающее поле заявки: ${missingQuestion}`
+                : "Все базовые поля заявки собраны: можно подтвердить передачу администратору."
           ].join("\n")
         }
       ]
@@ -354,7 +362,20 @@ async function openAiReply({ business, conversation, text, user, llm }) {
   const data = await response.json();
   const aiText = data.choices?.[0]?.message?.content?.trim();
   if (!aiText) return null;
-  return { ...local, reply: aiText };
+  return { ...local, reply: sanitizeAiReply(aiText, local) };
+}
+
+function sanitizeAiReply(reply, local) {
+  const location = local?.leadDraft?.location;
+  if (!location) return reply;
+
+  let cleaned = String(reply || "");
+  if (!local.leadDraft?.desiredTime) {
+    cleaned = cleaned
+      .replace(/какой филиал и время вам удобнее\??/giu, "Какое время записи вам удобно?")
+      .replace(/какой филиал вам удобнее\??/giu, "Какое время записи вам удобно?");
+  }
+  return cleaned.trim();
 }
 
 export async function generateSalesReply({ business, conversation, text, user = {}, openai = {} }) {
@@ -378,5 +399,6 @@ export const internals = {
   extractLeadFields,
   localReply,
   normalize,
-  nextQuestion
+  nextQuestion,
+  sanitizeAiReply
 };
