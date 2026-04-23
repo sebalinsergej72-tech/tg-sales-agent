@@ -34,6 +34,7 @@ export const config = {
   managerBotToken: process.env.MANAGER_BOT_TOKEN || "",
   managerBotUsername: (process.env.MANAGER_BOT_USERNAME || "YourManagerBot").replace(/^@/, ""),
   telegramWebhookSecret: process.env.TELEGRAM_WEBHOOK_SECRET || "local-dev-secret",
+  adminImportSecret: process.env.ADMIN_IMPORT_SECRET || "",
   telegramPolling: boolEnv("TELEGRAM_POLLING", false),
   telegramPollTimeout: Number(process.env.TELEGRAM_POLL_TIMEOUT || 25),
   openaiApiKey: process.env.OPENAI_API_KEY || "",

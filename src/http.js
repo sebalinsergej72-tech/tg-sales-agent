@@ -59,6 +59,46 @@ function safeBusinessPatch(input) {
   return Object.fromEntries(Object.entries(input).filter(([key]) => allowed.includes(key)));
 }
 
+function assertAdmin(req) {
+  const expected = config.adminImportSecret || config.telegramWebhookSecret;
+  const provided = req.headers["x-admin-secret"];
+  return Boolean(expected && provided && provided === expected);
+}
+
+function normalizeImportedDb(input) {
+  const db = input?.db || input;
+  const requiredArrays = ["businesses", "bots", "conversations", "leads", "events"];
+  if (!db || typeof db !== "object") {
+    throw new Error("invalid db payload");
+  }
+  for (const key of requiredArrays) {
+    if (!Array.isArray(db[key])) throw new Error(`invalid db payload: ${key} must be an array`);
+  }
+  return {
+    meta: {
+      ...(db.meta || {}),
+      version: db.meta?.version || 1,
+      importedAt: new Date().toISOString()
+    },
+    businesses: db.businesses,
+    bots: db.bots,
+    conversations: db.conversations,
+    leads: db.leads,
+    events: db.events.slice(0, 500)
+  };
+}
+
+function dbSummary(db) {
+  return {
+    businesses: db.businesses.length,
+    bots: db.bots.length,
+    conversations: db.conversations.length,
+    leads: db.leads.length,
+    events: db.events.length,
+    botUsernames: db.bots.map((bot) => bot.username).filter(Boolean)
+  };
+}
+
 async function api(req, res, method, pathname, query) {
   if (method === "GET" && pathname === "/api/health") {
     const llmProvider = config.openrouterApiKey ? "openrouter" : config.openaiApiKey ? "openai" : "local";
@@ -80,6 +120,14 @@ async function api(req, res, method, pathname, query) {
 
   if (method === "GET" && pathname === "/api/telegram/manager-status") {
     return json(res, 200, { manager: await getManagerStatus() });
+  }
+
+  if (method === "POST" && pathname === "/api/admin/import-db") {
+    if (!assertAdmin(req)) return json(res, 403, { error: "forbidden" });
+    const imported = normalizeImportedDb(await readJson(req));
+    store.write(imported);
+    store.appendEvent("admin.import-db", dbSummary(imported));
+    return json(res, 200, { ok: true, summary: dbSummary(store.read()) });
   }
 
   if (method === "POST" && pathname === "/api/businesses") {
